@@ -11,30 +11,29 @@ write_upstream_conf() {
   conf_path="/usr/local/nginx/conf/hls_upstream.conf"
   mkdir -p "$(dirname "$conf_path")"
 
-  # Decide servers list
-  servers=""
-  if [ -n "$ORIGIN_SERVERS" ]; then
-    # Comma or whitespace separated host[:port][ options]
-    IFS=','
-    for item in $ORIGIN_SERVERS; do
-      # trim whitespace
-      item_trimmed=$(printf '%s' "$item" | awk '{$1=$1;print}')
-      [ -n "$item_trimmed" ] && servers="$servers\n    server $item_trimmed;"
-    done
-    unset IFS
-  elif [ -n "$ORIGIN_HOST" ] || [ -n "$ORIGIN_PORT" ]; then
-    host_val=${ORIGIN_HOST:-127.0.0.1}
-    port_val=${ORIGIN_PORT:-80}
-    servers="\n    server ${host_val}:${port_val};"
-  else
-    # Fallback to the original example
-    servers="\n    server origin-test.origin-videos.com:80;"
-  fi
+  # Build upstream block deterministically and sanitize CRLF if any
+  {
+    printf 'upstream hls_upstream {\n'
+    if [ -n "$ORIGIN_SERVERS" ]; then
+      IFS=','
+      for item in $ORIGIN_SERVERS; do
+        item_trimmed=$(printf '%s' "$item" | awk '{$1=$1;print}')
+        [ -n "$item_trimmed" ] && printf '    server %s;\n' "$item_trimmed"
+      done
+      unset IFS
+    elif [ -n "$ORIGIN_HOST" ] || [ -n "$ORIGIN_PORT" ]; then
+      host_val=${ORIGIN_HOST:-127.0.0.1}
+      port_val=${ORIGIN_PORT:-80}
+      printf '    server %s:%s;\n' "$host_val" "$port_val"
+    else
+      printf '    server origin-test.origin-videos.com:80;\n'
+    fi
+    printf '}\n'
+  } >"$conf_path"
 
-  cat >"$conf_path" <<EOF
-upstream hls_upstream {${servers}
-}
-EOF
+  # Remove potential CR characters just in case
+  sed -i 's/\r$//' "$conf_path" 2>/dev/null || true
+
   echo "ENTRYPOINT: wrote upstream config to $conf_path" >&2
 }
 
