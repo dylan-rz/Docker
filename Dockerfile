@@ -49,6 +49,7 @@ RUN mkdir -p /usr/local/nginx/cache /usr/local/nginx/logs /usr/local/nginx/html
 # Copy templates only; runtime nginx.conf is rendered by entrypoint
 COPY certbot/nginx.conf.template /usr/local/nginx/conf/nginx.conf.template
 COPY certbot/nginx.nossl.template /usr/local/nginx/conf/nginx.nossl.template
+COPY certbot/ssl-params.conf /usr/local/nginx/conf/ssl-params.conf
 COPY certbot/renewal/watch-reload.sh /usr/local/bin/watch-reload.sh
 RUN chmod +x /usr/local/bin/watch-reload.sh
 

@@ -185,17 +185,17 @@ http {
         }
 
     }
-    # HTTPS server using certificates from certbot (replace example.com with your domain)
+    # HTTPS server using certificates from certbot
     server {
-        listen 443 ssl http2;
-        server_name test.contopo.com;  # <- replace with your real domain when rendered
+        listen 443 ssl;
+        http2;
+        server_name $DOMAIN;
 
         # Certbot places certificates under /etc/letsencrypt/live/<domain>/
-        ssl_certificate /etc/letsencrypt/live/test.contopo.com/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/test.contopo.com/privkey.pem;
-        # Recommended SSL config from certbot (if present)
-        include /etc/letsencrypt/options-ssl-nginx.conf;
-        ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+        ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+        # SSL params (local include, safe defaults)
+        include /usr/local/nginx/conf/ssl-params.conf;
 
         root /usr/local/nginx/html;
         index index.html index.htm;
@@ -293,7 +293,7 @@ http {
     # Optional: redirect plain HTTP to HTTPS for your domain
     server {
         listen 80;
-        server_name test.contopo.com;  # <- replace with your real domain when rendered
+        server_name $DOMAIN;
         return 301 https://$host$request_uri;
     }
 }
