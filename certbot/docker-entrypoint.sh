@@ -62,6 +62,10 @@ echo "ENTRYPOINT: DOMAIN='$DOMAIN' EMAIL='$EMAIL' LETSENCRYPT='${LETSENCRYPT:-fa
 write_upstream_conf
 ensure_host_header_var
 
+# Default and export cache sizing variable used in nginx.conf.template
+HLS_PROXY_MAX_SIZE="${HLS_PROXY_MAX_SIZE:-8000g}"
+export HLS_PROXY_MAX_SIZE
+
 if [ -n "$DOMAIN" ] && [ "$LETSENCRYPT_LOWER" = "true" ]; then
   # Start a background watcher that reloads nginx if certificates change
   if [ -x /usr/local/bin/watch-reload.sh ]; then
@@ -70,14 +74,14 @@ if [ -n "$DOMAIN" ] && [ "$LETSENCRYPT_LOWER" = "true" ]; then
   # If certs already present, render final config and start normally
   if has_certs; then
     echo "Certificates already present for $DOMAIN - rendering final nginx config"
-    envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER' < /usr/local/nginx/conf/nginx.conf.template > /usr/local/nginx/conf/nginx.conf
+    envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER \$HLS_PROXY_MAX_SIZE' < /usr/local/nginx/conf/nginx.conf.template > /usr/local/nginx/conf/nginx.conf
     # Exec the provided CMD (start nginx in foreground)
     exec "$@"
   fi
 
   # No certs yet - start nginx with a safe no-SSL config so the container can run
   echo "No certificates found for $DOMAIN - starting temporary HTTP-only nginx to allow validation"
-  envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER' < /usr/local/nginx/conf/nginx.nossl.template > /usr/local/nginx/conf/nginx.conf
+  envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER \$HLS_PROXY_MAX_SIZE' < /usr/local/nginx/conf/nginx.nossl.template > /usr/local/nginx/conf/nginx.conf
 
   # Start nginx as daemon so we can run certbot standalone which needs port 80
   /usr/local/nginx/sbin/nginx || true
@@ -96,7 +100,7 @@ if [ -n "$DOMAIN" ] && [ "$LETSENCRYPT_LOWER" = "true" ]; then
   # If certs obtained, render final SSL config
   if has_certs; then
     echo "Certificates obtained, rendering final SSL nginx config"
-    envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER' < /usr/local/nginx/conf/nginx.conf.template > /usr/local/nginx/conf/nginx.conf
+    envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER \$HLS_PROXY_MAX_SIZE' < /usr/local/nginx/conf/nginx.conf.template > /usr/local/nginx/conf/nginx.conf
   else
     echo "Certificates still missing after certbot run - leaving temporary config in place"
   fi
@@ -110,7 +114,7 @@ else
   # No domain/letsencrypt requested - leave config as-is or render if DOMAIN provided
   if [ -n "$DOMAIN" ]; then
     echo "Rendering nginx config from template for domain: $DOMAIN (LETSENCRYPT not enabled)"
-    envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER' < /usr/local/nginx/conf/nginx.conf.template > /usr/local/nginx/conf/nginx.conf
+    envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER \$HLS_PROXY_MAX_SIZE' < /usr/local/nginx/conf/nginx.conf.template > /usr/local/nginx/conf/nginx.conf
   else
     echo "No DOMAIN provided - rendering temporary HTTP-only config (nossl template)"
     envsubst '\$DOMAIN \$EMAIL \$ORIGIN_HOST_HEADER' < /usr/local/nginx/conf/nginx.nossl.template > /usr/local/nginx/conf/nginx.conf

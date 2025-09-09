@@ -9,16 +9,18 @@ Environment variables (can be set in a .env file or your shell):
  - ORIGIN_HOST: optional hostname of your upstream origin used by the VOD module (e.g. origin.example.com)
  - ORIGIN_PORT: optional port for the upstream origin (default: 80)
  - ORIGIN_SERVERS: optional comma-separated list of upstream servers for load-balancing (e.g. "origin1:80,origin2:80")
- - ORIGIN_HOST_HEADER: optional Host header to send to the origin; defaults to ORIGIN_HOST if set, otherwise uses nginx variable $host
+- ORIGIN_HOST_HEADER: optional Host header to send to the origin; defaults to ORIGIN_HOST if set, otherwise uses nginx variable $host
+ - HLS_PROXY_MAX_SIZE: optional max size for the HTTPS proxy cache (e.g. 8000g). Defaults to 8000g if unset.
 
 How it works:
 - On container start the entrypoint renders `/usr/local/nginx/conf/nginx.conf` from `nginx.conf.template` using `envsubst`.
 - If `LETSENCRYPT=true` and `DOMAIN` is present the entrypoint will call certbot non-interactively to obtain/renew certs.
- - The entrypoint also generates `/usr/local/nginx/conf/hls_upstream.conf`:
+- The entrypoint also generates `/usr/local/nginx/conf/hls_upstream.conf`:
    - If `ORIGIN_SERVERS` is set, it creates multiple `server` lines (split by commas).
    - Else if `ORIGIN_HOST`/`ORIGIN_PORT` are set, it creates a single `server ORIGIN_HOST:ORIGIN_PORT;`.
    - Else it falls back to the example `origin-test.origin-videos.com:80`.
- - For upstream requests from the internal VOD location, the `Host` header is set to `${ORIGIN_HOST_HEADER}`; if unset it will default to `$host` at nginx runtime.
+- For upstream requests from the internal VOD location, the `Host` header is set to `${ORIGIN_HOST_HEADER}`; if unset it will default to `$host` at nginx runtime.
+ - The `proxy_cache_path` for `hls_proxy_cache` uses `$HLS_PROXY_MAX_SIZE`; the entrypoint defaults this to `8000g` if not provided.
 
 Usage examples:
 

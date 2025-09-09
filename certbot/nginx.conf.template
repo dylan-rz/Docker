@@ -46,7 +46,8 @@ http {
     # External proxy cache used for large HLS assets. Increase keys_zone so metadata can track large objects.
     # hls_proxy max_size parameterized for container configuration
     # Example: export HLS_PROXY_MAX_SIZE=8t
-    proxy_cache_path /usr/local/nginx/cache/hls_proxy levels=1:2 keys_zone=hls_proxy_cache:4096m max_size=8000g inactive=14d use_temp_path=off;
+    # Parameterized via $HLS_PROXY_MAX_SIZE (e.g., 8000g). Default is set in docker-entrypoint.sh
+    proxy_cache_path /usr/local/nginx/cache/hls_proxy levels=1:2 keys_zone=hls_proxy_cache:4096m max_size=$HLS_PROXY_MAX_SIZE inactive=14d use_temp_path=off;
 
     # Declare VOD caches once at http level
     vod_metadata_cache vod_metadata_cache 512m;

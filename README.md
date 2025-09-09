@@ -36,6 +36,7 @@ A production‑ready Docker stack that builds Nginx 1.26.x with the Kaltura `ngi
 - ORIGIN_HOST: Single upstream hostname (when not using `ORIGIN_SERVERS`).
 - ORIGIN_PORT: Port for single upstream (default `80`).
 - ORIGIN_HOST_HEADER: Host header to send to upstream; defaults to `ORIGIN_HOST` or the nginx `$host` variable.
+- HLS_PROXY_MAX_SIZE: Max size for the HTTPS edge proxy cache (e.g. `8000g`). Default: `8000g`.
 
 Advanced (optional):
 - WATCH_INTERVAL: Cert watcher polling interval (seconds, default `30`).
