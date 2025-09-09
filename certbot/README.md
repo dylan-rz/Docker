@@ -1,6 +1,6 @@
-Automated Let's Encrypt with environment variables
+Automated Let's Encrypt (sidecar-only) with environment variables
 
-This small helper adds templating and non-interactive certbot support to the nginx image.
+This helper documents templating in the nginx image and non-interactive certbot obtain/renew in the certbot sidecar.
 
 Environment variables (can be set in a .env file or your shell):
 - DOMAIN: the domain name to issue a certificate for (e.g. example.com)
@@ -27,7 +27,7 @@ Usage examples:
 # Using a .env file with docker compose
 DOMAIN=example.com
 EMAIL=admin@example.com
-LETSENCRYPT=true
+LETSENCRYPT=true  # no longer used by nginx; certbot sidecar handles obtain/renew
 
 # On Ubuntu 24.04, you can automate install/start with:
 #   sudo ./scripts/install-ubuntu-24.04.sh --domain "$DOMAIN" --email "$EMAIL" --letsencrypt true \
@@ -40,6 +40,6 @@ Then run:
 docker compose up --build
 
 Notes:
-- Certbot uses the nginx plugin and requires that the nginx process inside the container can bind to port 80.
-- The entrypoint continues even if certbot fails so the container will still start.
-- For production you'll want to mount `./letsencrypt` persistent volumes (already configured in `docker-compose.yml`) so certs persist between restarts.
+- The certbot sidecar uses webroot validation at `/var/lib/letsencrypt` served by nginx (HTTP on port 80).
+- Nginx renders a temporary HTTP-only config if certs are missing, and the watcher reloads nginx after certs arrive.
+- Ensure `./letsencrypt` volumes are mounted (configured in `docker-compose.yml`) so certs persist between restarts.

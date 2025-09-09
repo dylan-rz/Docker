@@ -92,7 +92,6 @@ http {
             vod_last_modified_types *;
             # Cache metadata and responses use globally-declared VOD caches (declared at http level)
             add_header X-Cache $upstream_cache_status always;
-            add_header X-Cache-Test "present" always;
             add_header Access-Control-Allow-Origin $cors_allow_origin always;
             add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
             add_header Access-Control-Allow-Headers "Range,Content-Type,Authorization,Origin,Accept" always;

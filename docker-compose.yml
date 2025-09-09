@@ -13,12 +13,11 @@ services:
       - ./cache:/usr/local/nginx/cache
     restart: unless-stopped
 
-    # Environment variables to enable automated Let's Encrypt provisioning.
+    # Environment variables for templating nginx config.
     # Set these in a .env file or in your environment before running docker compose up.
     environment:
       - DOMAIN=${DOMAIN}
       - EMAIL=${EMAIL}
-      - LETSENCRYPT=${LETSENCRYPT:-"false"}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
       interval: 30s

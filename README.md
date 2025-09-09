@@ -6,7 +6,7 @@ A production‑ready Docker stack that builds Nginx 1.26.x with the Kaltura `ngi
 
 - Nginx from source with `nginx-vod-module` for on‑the‑fly HLS.
 - Robust CORS + caching rules for manifests and segments.
-- Automated HTTPS via Let’s Encrypt (webroot validation) with periodic renewal.
+- Automated HTTPS via Let’s Encrypt (webroot validation) with periodic renewal (sidecar-only).
 - Hot reload on cert changes (in‑container watcher with config validation).
 - Template‑driven config (envsubst) to avoid drift; no static `nginx.conf`.
 - Multi‑origin support: load balance with `ORIGIN_SERVERS` or single `ORIGIN_HOST`+`ORIGIN_PORT`.
@@ -16,8 +16,8 @@ A production‑ready Docker stack that builds Nginx 1.26.x with the Kaltura `ngi
 
 ## Architecture
 
-- `nginx` (custom image): Nginx + VOD module, renders config from templates, optionally provisions certs.
-- `certbot` (sidecar): renews certs on schedule; watcher reloads Nginx when certs change.
+- `nginx` (custom image): Nginx + VOD module, renders config from templates. Does not run certbot.
+- `certbot` (sidecar): obtains missing certs (webroot) and renews on schedule; watcher in nginx reloads when certs change.
 - `php-fpm`: executes `remote_control.php` and other PHP endpoints within the Docker network.
 
 ## Quick Start

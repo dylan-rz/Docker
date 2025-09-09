@@ -12,8 +12,6 @@ RUN apt-get update && apt-get install -y \
     libswscale-dev \
     wget \
     git \
-    certbot \
-    python3-certbot-nginx \
     gettext-base \
     && rm -rf /var/lib/apt/lists/*
 
@@ -57,9 +55,7 @@ RUN chmod +x /usr/local/bin/watch-reload.sh
 # Entrypoint for envsubst templating and optional certbot provisioning
 COPY certbot/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# Certbot helper script
-COPY certbot/run-certbot.sh /usr/local/bin/run-certbot.sh
-RUN chmod +x /usr/local/bin/run-certbot.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose ports
 EXPOSE 80
