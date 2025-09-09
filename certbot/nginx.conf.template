@@ -123,7 +123,6 @@ http {
             vod_segment_duration 4000;
             # Cache segment and media responses use globally-declared VOD caches (declared at http level)
             add_header X-Cache $upstream_cache_status always;
-            add_header X-Cache-Test "present" always;
             add_header Access-Control-Allow-Origin $cors_allow_origin always;
             add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
             add_header Access-Control-Allow-Headers "Range,Content-Type,Authorization,Origin,Accept" always;
@@ -133,6 +132,8 @@ http {
         }
 
         location /upstream/ {
+            # Map module subrequests to origin path. Drop optional leading /hls/ when present.
+            rewrite ^/upstream/+hls/(.+)$ /$1 break;
             rewrite ^/upstream/+(.+)$ /$1 break;
             proxy_pass http://hls_upstream/;
             # Ensure upstream CORS headers do not leak through and create duplicates.
