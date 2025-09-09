@@ -1,0 +1,53 @@
+services:
+  nginx:
+    build: .
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    volumes:
+      - ./letsencrypt/etc:/etc/letsencrypt
+      - ./letsencrypt/var:/var/lib/letsencrypt
+      - ./letsencrypt/log:/var/log/letsencrypt
+      - ./logs:/usr/local/nginx/logs
+      - ./cache:/usr/local/nginx/cache
+    restart: unless-stopped
+
+    # Environment variables to enable automated Let's Encrypt provisioning.
+    # Set these in a .env file or in your environment before running docker compose up.
+    environment:
+      - DOMAIN=${DOMAIN}
+      - EMAIL=${EMAIL}
+      - LETSENCRYPT=${LETSENCRYPT:-"false"}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./letsencrypt/etc:/etc/letsencrypt
+      - ./letsencrypt/var:/var/lib/letsencrypt
+      - ./letsencrypt/log:/var/log/letsencrypt
+      - ./certbot/renewal:/renewal
+    environment:
+      - EMAIL=${EMAIL}
+      - DOMAIN=${DOMAIN}
+    entrypoint: ["/bin/sh","-c","sh /renewal/renew.sh"]
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
+  php-fpm:
+    build:
+      context: .
+      dockerfile: php-fpm/Dockerfile
+    # Do not expose ports - php-fpm is only reachable from the nginx service via the docker network
+    volumes:
+      # Mount the project root so PHP-FPM can execute remote_control.php and any other PHP files
+      - ./:/var/www/html:ro
+      # Optionally share logs or other runtime files if needed
+      - ./logs:/var/log/php-fpm
+    restart: unless-stopped

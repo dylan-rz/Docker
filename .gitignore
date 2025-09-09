@@ -1,0 +1,34 @@
+# Logs and caches
+logs/
+cache/
+*.log
+*.log.*
+
+# Let’s Encrypt and Certbot state (certs, keys, renewal data)
+letsencrypt/
+certbot/renewal/*.log*
+
+# Common certificate and key file patterns (anywhere)
+*.pem
+*.key
+*.crt
+*.csr
+*.cer
+*.der
+*.p12
+*.pfx
+*.pkcs12
+*.jks
+*.keystore
+*.srl
+
+# Docker artifacts
+*.pid
+*.pid.lock
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+

@@ -1,0 +1,299 @@
+# worker tuning (place at top-level)
+worker_processes auto;
+worker_rlimit_nofile 200000;
+
+events {
+    use epoll;               # Linux: best for many concurrent sockets
+    worker_connections 65536;
+    multi_accept on;         # accept multiple new connections in one loop
+    accept_mutex off;        # reduce accept contention on modern kernels
+}
+
+http {
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    client_max_body_size 100m;
+
+    # important for HLS: many small files (segments)
+    open_file_cache max=200000 inactive=10s;
+    open_file_cache_valid 20s;
+    open_file_cache_min_uses 2;
+    open_file_cache_errors on;
+
+    # keepalive and timeouts
+    keepalive_timeout 15s;
+    keepalive_requests 10000;
+    send_timeout 30s;
+
+    include       /usr/local/nginx/conf/mime.types;
+    default_type  application/octet-stream;
+
+    # Logging
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /usr/local/nginx/logs/access.log;
+    error_log /usr/local/nginx/logs/error.log debug;
+
+    # Upstream servers for remote VOD origin are generated at runtime into this file
+    # via docker-entrypoint.sh based on ORIGIN_SERVERS or ORIGIN_HOST/ORIGIN_PORT.
+    include /usr/local/nginx/conf/hls_upstream.conf;
+
+    proxy_cache_path /usr/local/nginx/cache levels=1:2 keys_zone=hls_cache:10m max_size=10g inactive=60m use_temp_path=off;
+    # Cache for external proxy layer between clients and vod module
+    # External proxy cache used for large HLS assets. Increase keys_zone so metadata can track large objects.
+    # hls_proxy max_size parameterized for container configuration
+    # Example: export HLS_PROXY_MAX_SIZE=8t
+    proxy_cache_path /usr/local/nginx/cache/hls_proxy levels=1:2 keys_zone=hls_proxy_cache:4096m max_size=8000g inactive=14d use_temp_path=off;
+
+    # Declare VOD caches once at http level
+    vod_metadata_cache vod_metadata_cache 512m;
+    vod_response_cache vod_response_cache 2048m;
+
+    gzip off;
+
+    # Build a CORS origin variable: when Origin is present echo it, otherwise use '*'
+    map $http_origin $cors_allow_origin {
+        default $http_origin;
+        ""      "*";
+    }
+
+    server {
+        listen 81;
+        server_name localhost;
+
+        root /usr/local/nginx/html;
+        index index.html index.htm;
+
+        # Enable vod module for manifests and HLS resources under /hls/
+        # Regex location ensures manifest URIs (.m3u8) are handled explicitly.
+        location ~ ^/hls/.*\.m3u8$ {
+            # CORS preflight handling
+            if ($request_method = 'OPTIONS') {
+                add_header Access-Control-Allow-Origin $cors_allow_origin always;
+                add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+                add_header Access-Control-Allow-Headers "Range,Content-Type,Authorization,Origin,Accept" always;
+                add_header Access-Control-Allow-Credentials "true" always;
+                add_header Access-Control-Max-Age 1728000 always;
+                add_header Access-Control-Expose-Headers "Content-Length,Accept-Ranges,Content-Range,X-Cache" always;
+                add_header Vary Origin always;
+                return 204;
+            }
+
+            # Set VOD segment duration (milliseconds) for this location
+            vod_segment_duration 4000;
+
+            vod hls;
+            vod_mode remote;
+            vod_upstream_location /upstream;
+            vod_last_modified_types *;
+            # Cache metadata and responses use globally-declared VOD caches (declared at http level)
+            add_header X-Cache $upstream_cache_status always;
+            add_header X-Cache-Test "present" always;
+            add_header Access-Control-Allow-Origin $cors_allow_origin always;
+            add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "Range,Content-Type,Authorization,Origin,Accept" always;
+            add_header Access-Control-Allow-Credentials "true" always;
+            add_header Access-Control-Expose-Headers "Content-Length,Accept-Ranges,Content-Range,X-Cache" always;
+            add_header Vary Origin always;
+            # Ensure manifests do not contain http:// URIs when served from HTTPS
+            # (moved to the HTTPS front-door so internal server can keep Content-Length)
+        }
+
+        # For all other HLS resources, let vod module handle packaging in remote mode.
+    location /hls/ {
+            # CORS preflight handling for HLS resources
+            if ($request_method = 'OPTIONS') {
+                add_header Access-Control-Allow-Origin $cors_allow_origin always;
+                add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+                add_header Access-Control-Allow-Headers "Range,Content-Type,Authorization,Origin,Accept" always;
+                add_header Access-Control-Allow-Credentials "true" always;
+                add_header Access-Control-Max-Age 1728000 always;
+                add_header Access-Control-Expose-Headers "Content-Length,Accept-Ranges,Content-Range,X-Cache" always;
+                add_header Vary Origin always;
+                return 204;
+            }
+
+            vod hls;
+            vod_mode remote;
+            vod_upstream_location /upstream;
+            vod_last_modified_types *;
+            vod_segment_duration 4000;
+            # Cache segment and media responses use globally-declared VOD caches (declared at http level)
+            add_header X-Cache $upstream_cache_status always;
+            add_header X-Cache-Test "present" always;
+            add_header Access-Control-Allow-Origin $cors_allow_origin always;
+            add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "Range,Content-Type,Authorization,Origin,Accept" always;
+            add_header Access-Control-Allow-Credentials "true" always;
+            add_header Access-Control-Expose-Headers "Content-Length,Accept-Ranges,Content-Range,X-Cache" always;
+            add_header Vary Origin always;
+        }
+
+        location /upstream/ {
+            rewrite ^/upstream/+(.+)$ /$1 break;
+            proxy_pass http://hls_upstream/;
+            # Ensure upstream CORS headers do not leak through and create duplicates.
+            proxy_hide_header Access-Control-Allow-Origin;
+            proxy_hide_header Access-Control-Allow-Methods;
+            proxy_hide_header Access-Control-Allow-Headers;
+            proxy_hide_header Access-Control-Allow-Credentials;
+            proxy_hide_header Access-Control-Expose-Headers;
+            # Allow Content-Length from origin to flow through so PHP's header is preserved.
+            # Buffer upstream responses so nginx can compute and preserve Content-Length when possible.
+            proxy_buffering on;
+            proxy_max_temp_file_size 0;
+            proxy_buffer_size 64k;
+            proxy_buffers 4 256k;
+            proxy_busy_buffers_size 512k;
+            proxy_read_timeout 120s;
+            # log upstream subrequests to a separate file so we can confirm they arrive
+            access_log /usr/local/nginx/logs/upstream_access.log;
+            # Send backend Host header: defaults to $host unless overridden by ORIGIN_HOST or ORIGIN_HOST_HEADER
+            proxy_set_header Host ${ORIGIN_HOST_HEADER};
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+        }
+
+        # Handle KVS control endpoint locally via PHP-FPM on the edge
+        location = /remote_control.php {
+            include fastcgi_params;
+            # Ensure query string and request metadata are forwarded to PHP
+            fastcgi_param QUERY_STRING $query_string;
+            fastcgi_param REQUEST_METHOD $request_method;
+            fastcgi_param CONTENT_TYPE $content_type;
+            fastcgi_param CONTENT_LENGTH $content_length;
+            fastcgi_param HTTPS $https;
+            fastcgi_param HTTP_HOST $host;
+            fastcgi_param SERVER_PORT $server_port;
+            fastcgi_param SCRIPT_FILENAME /var/www/html/remote_control.php;
+            fastcgi_param SCRIPT_NAME /remote_control.php;
+            fastcgi_pass php-fpm:9000;
+            fastcgi_read_timeout 120s;
+            fastcgi_buffer_size 64k;
+            fastcgi_buffers 4 256k;
+            access_log /usr/local/nginx/logs/upstream_access.log;
+        }
+
+        location / {
+            try_files $uri $uri/ =404;
+        }
+
+    }
+    # HTTPS server using certificates from certbot (replace example.com with your domain)
+    server {
+        listen 443 ssl http2;
+        server_name test.contopo.com;  # <- replace with your real domain when rendered
+
+        # Certbot places certificates under /etc/letsencrypt/live/<domain>/
+        ssl_certificate /etc/letsencrypt/live/test.contopo.com/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/test.contopo.com/privkey.pem;
+        # Recommended SSL config from certbot (if present)
+        include /etc/letsencrypt/options-ssl-nginx.conf;
+        ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+        root /usr/local/nginx/html;
+        index index.html index.htm;
+
+        # Serve HLS via proxy to the internal VOD server (port 80)
+        location /hls/ {
+            proxy_pass http://127.0.0.1:81/hls/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_buffering on;
+            proxy_buffers 8 16k;
+            proxy_read_timeout 120s;
+            # Front-facing caching for responses coming from the local upstream on HTTPS
+            # Use the hls_proxy cache declared at http level (keys_zone=hls_proxy_cache)
+            proxy_cache hls_proxy_cache;
+            # Use canonical URI (no query string) so signed tokens don't fragment the cache
+            proxy_cache_key "$scheme$host$uri";
+            # Segments are immutable; cache longer. Manifests remain shorter upstream.
+            proxy_cache_valid 200 206 7d;
+            proxy_cache_valid 302 10m;
+            proxy_cache_valid 301 1h;
+            proxy_cache_valid 404 1m;
+            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+            proxy_cache_lock on;
+            # Encourage downstream caches and CDNs to store content
+            add_header Cache-Control "public, max-age=604800" always;
+            # Hide any CORS headers coming from the backend (127.0.0.1:81)
+            proxy_hide_header Access-Control-Allow-Origin;
+            proxy_hide_header Access-Control-Allow-Methods;
+            proxy_hide_header Access-Control-Allow-Headers;
+            proxy_hide_header Access-Control-Allow-Credentials;
+            proxy_hide_header Access-Control-Expose-Headers;
+
+            add_header X-Cache $upstream_cache_status always;
+            add_header Access-Control-Allow-Origin $cors_allow_origin always;
+            add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "Range,Content-Type,Authorization,Origin,Accept" always;
+            add_header Access-Control-Allow-Credentials "true" always;
+            add_header Vary Origin always;
+            # Ensure manifests do not contain http:// URIs when served from HTTPS
+            # replace http:// -> https:// in m3u8 bodies so browsers don't block segments
+            sub_filter 'http://' 'https://';
+            sub_filter_once off;
+            sub_filter_types application/vnd.apple.mpegurl text/plain;
+        }
+
+        # Handle KVS control endpoint locally via PHP-FPM on the edge (serves manifests/X-Accel-Redirect)
+        location = /remote_control.php {
+            include fastcgi_params;
+            # Ensure query string and request metadata are forwarded to PHP
+            fastcgi_param QUERY_STRING $query_string;
+            fastcgi_param REQUEST_METHOD $request_method;
+            fastcgi_param CONTENT_TYPE $content_type;
+            fastcgi_param CONTENT_LENGTH $content_length;
+            fastcgi_param HTTPS $https;
+            fastcgi_param HTTP_HOST $host;
+            fastcgi_param SERVER_PORT $server_port;
+            fastcgi_param SCRIPT_FILENAME /var/www/html/remote_control.php;
+            fastcgi_param SCRIPT_NAME /remote_control.php;
+            fastcgi_pass php-fpm:9000;
+            fastcgi_read_timeout 120s;
+            fastcgi_buffer_size 64k;
+            fastcgi_buffers 4 256k;
+            access_log /usr/local/nginx/logs/upstream_access.log;
+        }
+
+        # Proxy other requests to the local server
+        location / {
+            proxy_pass http://127.0.0.1:81/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            # Cache general proxied responses on the HTTPS edge using the hls_proxy cache
+            proxy_cache hls_proxy_cache;
+            proxy_cache_key "$scheme$host$request_uri";
+            proxy_cache_valid 200 302 5m;
+            proxy_cache_valid 301 1h;
+            proxy_cache_valid 404 1m;
+            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+            proxy_cache_lock on;
+            # Hide any CORS headers coming from the backend to avoid duplicates
+            proxy_hide_header Access-Control-Allow-Origin;
+            proxy_hide_header Access-Control-Allow-Methods;
+            proxy_hide_header Access-Control-Allow-Headers;
+            proxy_hide_header Access-Control-Allow-Credentials;
+            proxy_hide_header Access-Control-Expose-Headers;
+
+            add_header X-Cache $upstream_cache_status always;
+        }
+    }
+
+    # Optional: redirect plain HTTP to HTTPS for your domain
+    server {
+        listen 80;
+        server_name test.contopo.com;  # <- replace with your real domain when rendered
+        return 301 https://$host$request_uri;
+    }
+}

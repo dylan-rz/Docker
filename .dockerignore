@@ -1,0 +1,25 @@
+# Keep secrets and noise out of Docker build context
+logs/
+cache/
+letsencrypt/
+*.log
+*.log.*
+*.pem
+*.key
+*.crt
+*.csr
+*.cer
+*.der
+*.p12
+*.pfx
+*.pkcs12
+*.jks
+*.keystore
+*.srl
+.git
+.gitignore
+.github/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

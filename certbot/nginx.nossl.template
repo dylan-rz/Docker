@@ -1,0 +1,32 @@
+worker_processes auto;
+worker_rlimit_nofile 200000;
+
+events { worker_connections 1024; }
+
+http {
+    include       /usr/local/nginx/conf/mime.types;
+    default_type  application/octet-stream;
+    access_log /usr/local/nginx/logs/access.log;
+    error_log /usr/local/nginx/logs/error.log info;
+
+    server {
+        listen 80;
+        server_name $DOMAIN;
+
+        root /usr/local/nginx/html;
+        index index.html index.htm;
+
+        # Allow certbot HTTP-01 challenge to succeed
+        location /.well-known/acme-challenge/ {
+            root /var/lib/letsencrypt/; # certbot standalone will create files here if needed
+        }
+
+        location / {
+            proxy_pass http://127.0.0.1:81/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}
