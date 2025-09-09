@@ -62,6 +62,13 @@ Examples:
 - Start: `docker compose up -d --build`.
 - Logs: `docker compose logs -f nginx`.
 
+## Interactive Setup
+
+- Run `./scripts/setup-env.sh` to be prompted for required variables and generate a `.env` file.
+- Alternatively, run the installer in interactive mode on Ubuntu 24.04:
+  - `sudo ./scripts/install-ubuntu-24.04.sh --interactive`
+  - This will prompt for missing values, install Docker + Compose, create volumes, set up logrotate, and start the stack.
+
 ## Operations
 
 - Test config inside container: `docker compose exec nginx /usr/local/nginx/sbin/nginx -t`.

@@ -21,6 +21,7 @@ Options (env or flags):
   --origin-port PORT              Upstream origin port (default: 80)
   --origin-servers LIST           Comma-separated upstream servers (e.g. host1:80,host2:80)
   --origin-host-header VALUE      Host header to send upstream (default: uses --origin-host or \$host)
+  --interactive                   Prompt for missing values and write .env
   --no-service                    Do not install a systemd service (just start once)
   --help                          Show this help
 
@@ -42,6 +43,7 @@ require_root() {
 
 parse_args() {
   NO_SERVICE=0
+  INTERACTIVE=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --domain) DOMAIN="$2"; shift 2;;
@@ -51,6 +53,7 @@ parse_args() {
       --origin-port) ORIGIN_PORT="$2"; shift 2;;
       --origin-servers) ORIGIN_SERVERS="$2"; shift 2;;
       --origin-host-header) ORIGIN_HOST_HEADER="$2"; shift 2;;
+      --interactive) INTERACTIVE=1; shift;;
       --no-service) NO_SERVICE=1; shift;;
       --help|-h) usage; exit 0;;
       *) echo "Unknown option: $1" >&2; usage; exit 1;;
@@ -97,8 +100,12 @@ setup_env_and_dirs() {
   : "${ORIGIN_PORT:=80}"
 
   if [[ ! -f "$env_file" ]]; then
-    echo "[setup] Writing .env"
-    cat > "$env_file" <<EOF
+    if [[ ${INTERACTIVE:-0} -eq 1 ]] || [[ -t 0 ]]; then
+      echo "[setup] Launching interactive .env creation"
+      ( cd "$repo_dir" && DOMAIN="${DOMAIN:-}" EMAIL="${EMAIL:-}" ORIGIN_HOST="${ORIGIN_HOST:-}" ORIGIN_PORT="${ORIGIN_PORT:-}" ORIGIN_SERVERS="${ORIGIN_SERVERS:-}" ORIGIN_HOST_HEADER="${ORIGIN_HOST_HEADER:-}" HLS_PROXY_MAX_SIZE="${HLS_PROXY_MAX_SIZE:-}" ./scripts/setup-env.sh )
+    else
+      echo "[setup] Writing .env"
+      cat > "$env_file" <<EOF
 DOMAIN=${DOMAIN:-}
 EMAIL=${EMAIL:-}
 LETSENCRYPT=${LETSENCRYPT}
@@ -108,6 +115,7 @@ ORIGIN_SERVERS=${ORIGIN_SERVERS:-}
 ORIGIN_HOST_HEADER=${ORIGIN_HOST_HEADER:-}
 HLS_PROXY_MAX_SIZE=${HLS_PROXY_MAX_SIZE:-}
 EOF
+    fi
   else
     echo "[setup] .env already exists; leaving as-is"
   fi
