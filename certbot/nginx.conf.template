@@ -188,7 +188,7 @@ http {
     # HTTPS server using certificates from certbot
     server {
         listen 443 ssl;
-        http2;
+        http2 on;
         server_name $DOMAIN;
 
         # Certbot places certificates under /etc/letsencrypt/live/<domain>/
