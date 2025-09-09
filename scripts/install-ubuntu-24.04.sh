@@ -102,7 +102,8 @@ setup_env_and_dirs() {
   if [[ ! -f "$env_file" ]]; then
     if [[ ${INTERACTIVE:-0} -eq 1 ]] || [[ -t 0 ]]; then
       echo "[setup] Launching interactive .env creation"
-      ( cd "$repo_dir" && DOMAIN="${DOMAIN:-}" EMAIL="${EMAIL:-}" ORIGIN_HOST="${ORIGIN_HOST:-}" ORIGIN_PORT="${ORIGIN_PORT:-}" ORIGIN_SERVERS="${ORIGIN_SERVERS:-}" ORIGIN_HOST_HEADER="${ORIGIN_HOST_HEADER:-}" HLS_PROXY_MAX_SIZE="${HLS_PROXY_MAX_SIZE:-}" ./scripts/setup-env.sh )
+      # Use bash to execute the helper to avoid relying on the executable bit/noexec mounts
+      ( cd "$repo_dir" && DOMAIN="${DOMAIN:-}" EMAIL="${EMAIL:-}" ORIGIN_HOST="${ORIGIN_HOST:-}" ORIGIN_PORT="${ORIGIN_PORT:-}" ORIGIN_SERVERS="${ORIGIN_SERVERS:-}" ORIGIN_HOST_HEADER="${ORIGIN_HOST_HEADER:-}" HLS_PROXY_MAX_SIZE="${HLS_PROXY_MAX_SIZE:-}" bash ./scripts/setup-env.sh )
     else
       echo "[setup] Writing .env"
       cat > "$env_file" <<EOF
